@@ -1,0 +1,53 @@
+{
+  "site_url": "http://ultimatenews.lovestoblog.com",
+  "ftp": {
+    "host": "ftpupload.net",
+    "user": "if0_39425938",
+    "pass": "LavaPhoenix7501"
+  },
+  "content_provider": {
+    "provider": "ollama",
+    "ollama_settings": {
+      "model": "llama3:8b",
+      "base_url": "http://localhost:11434/api/generate"
+    }
+  },
+  "keyword_management": {
+    "source": "google_trends",
+    "keywords_file": "keywords.txt",
+    "used_keywords_file": "used_keywords.txt"
+  },
+  "throttling": {
+    "min_delay_between_posts_minutes": 240,
+    "max_posts_per_24_hours": 4,
+    "post_history_file": "post_history.log"
+  },
+  "social_posting": {
+    "reddit": {
+      "enabled": false,
+      "client_id": "YOUR_REDDIT_CLIENT_ID",
+      "client_secret": "YOUR_REDDIT_CLIENT_SECRET",
+      "username": "YOUR_REDDIT_USERNAME",
+      "password": "LavaPhoenix7501!",
+      "subreddit": "blogging",
+      "post_title_template": "New Blog Post: {article_title}"
+    }
+  },
+  "product_portfolio": [
+    {
+      "title": "Mitolyn",
+      "description": "Unlock your metabolic power and burn more calories with Mitolyn, a proprietary blend of 6 exotic nutrients and plants designed to support healthy mitochondria levels for fat burning and energy.",
+      "link": "https://8ae0dajy67rn2u8jlm386e5mfd.hop.clickbank.net"
+    },
+    {
+      "title": "ProDentim",
+      "description": "A unique blend of 3.5 billion probiotic strains and nutrients specially designed for the health of your teeth and gums, helping to repopulate your mouth with good bacteria.",
+      "link": "https://cb0e9gw0cmxsck1d5lscuekb8f.hop.clickbank.net"
+    },
+    {
+      "title": "ProDentim",
+      "description": "A unique blend of 3.5 billion probiotic strains and nutrients specially designed to repopulate your mouth with good bacteria for the health of your teeth and gums.",
+      "link": "https://745bbej1g8yp6z9m3kg2rpu88j.hop.clickbank.net"
+    }
+  ]
+} 
