@@ -3,6 +3,7 @@ import requests
 import json
 import re
 from utils import extract_title_from_html
+from groq import Groq
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -20,9 +21,66 @@ def generate_content(product_info, provider_config):
     provider = provider_config.get('provider')
     if provider == 'ollama':
         return _generate_with_ollama(product_info, provider_config.get('ollama_settings', {}))
+    elif provider == 'groq':
+        return _generate_with_groq(product_info, provider_config.get('groq_settings', {}))
     # Add other providers here if needed
     else:
         logging.error(f"Unsupported content provider: {provider}")
+        return None
+
+def _generate_with_groq(product_info, settings):
+    """Generates content using the Groq cloud AI."""
+    api_key = settings.get('api_key')
+    if not api_key or 'GET_YOUR' in api_key:
+        logging.error("Groq API key is missing or not configured in config.json.")
+        return None
+        
+    client = Groq(api_key=api_key)
+    model = settings.get('model', 'llama3-8b-8192')
+    
+    product_title = product_info.get('title', 'the selected product')
+    
+    # --- Prompt for Groq ---
+    prompt = (
+        f"You are an expert SEO writer. Your task is to write a blog post about the following product: '{product_title}'. "
+        "The output MUST be ONLY the raw HTML content for the article body. "
+        "It must include an `<h2>` tag for the title and several `<h3>` and `<p>` tags for the body. "
+        "Do NOT include `<html>`, `<body>` tags, or any commentary."
+    )
+
+    logging.info(f"Generating content for product '{product_title}' using Groq model '{model}'...")
+
+    try:
+        chat_completion = client.chat.completions.create(
+            messages=[
+                {
+                    "role": "user",
+                    "content": prompt,
+                }
+            ],
+            model=model,
+            temperature=0.7,
+        )
+        
+        article_html = chat_completion.choices[0].message.content
+        if not article_html:
+            logging.error("Received an empty response from Groq.")
+            return None
+
+        # --- Templating Logic ---
+        with open('template.html', 'r', encoding='utf-8') as f:
+            template_html = f.read()
+        
+        article_title_extracted = extract_title_from_html(article_html) or product_title
+        
+        final_html = template_html.replace('{{ARTICLE_TITLE}}', article_title_extracted)
+        final_html = final_html.replace('{{ARTICLE_CONTENT}}', article_html)
+
+        logging.info("Successfully generated and templated content from Groq.")
+        return final_html
+
+    except Exception as e:
+        logging.error(f"An error occurred while communicating with Groq: {e}")
         return None
 
 def _generate_with_ollama(product_info, settings):
@@ -188,6 +246,7 @@ if __name__ == '__main__':
         "description": "A comprehensive guide to losing weight and improving your health with the ketogenic diet. Includes meal plans, recipes, and expert tips."
     }
 
+    # This will now test whatever provider is set in config.json
     content = generate_content(mock_product_info, config.get('content_provider'))
     
     if content:

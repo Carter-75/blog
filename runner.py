@@ -4,11 +4,12 @@ import time
 from datetime import datetime, timedelta
 import random
 import sys # Import sys to read command-line arguments
+import os
 
 # Import your project modules
 from content_generator import generate_content
 from affiliate_link_inserter import insert_affiliate_links
-from site_deployer import deploy_to_ftp, update_index_page, delete_from_ftp
+from site_deployer import deploy_to_disk, update_index_page, delete_from_disk
 from social_poster import post_to_reddit
 from utils import get_config, get_post_history, add_to_post_history, save_post_history, extract_title_from_html, sanitize_filename
 
@@ -54,8 +55,9 @@ def main_loop():
         
         # --- Step 4: Deploy the New Post to the Website ---
         filename = f"{sanitize_filename(article_title)}.html"
+        web_app_path = config.get('web_app_path', '~/MoneyScript/webapp') # Example path
         
-        success = deploy_to_ftp(filename, final_html, config.get('ftp'))
+        success = deploy_to_disk(filename, final_html, os.path.expanduser(web_app_path))
         if success:
             # Add to history ONLY on successful deployment
             history_file = config.get('throttling', {}).get('post_history_file', 'post_history.log')
@@ -103,19 +105,20 @@ def main_loop():
                 
                 logging.info(f"Cleanup triggered for product link '{product_link}'. Found {len(product_posts)} posts, max is {MAX_POSTS_PER_PRODUCT}. Deleting {num_to_delete} oldest post(s).")
                 for post in posts_to_delete:
-                    if delete_from_ftp(post['filename'], config.get('ftp')):
+                    if delete_from_disk(post['filename'], os.path.expanduser(web_app_path)):
                         post_history = [p for p in post_history if p.get('filename') != post.get('filename')]
                     else:
-                        logging.error(f"Failed to delete '{post['filename']}' from FTP. It will remain in history. Aborting rotation for this product.")
+                        logging.error(f"Failed to delete '{post['filename']}' from disk. It will remain in history. Aborting rotation for this product.")
                         break
         
         save_post_history(history_file, post_history)
     
     # Update the main index page based on the final, cleaned history
+    web_app_path = config.get('web_app_path', '~/MoneyScript/webapp')
     try:
         with open('template.html', 'r', encoding='utf-8') as f:
             template_html = f.read()
-        update_index_page(post_history, config.get('ftp'), template_html)
+        update_index_page(post_history, os.path.expanduser(web_app_path), template_html)
     except FileNotFoundError:
         logging.error("Could not find template.html. Cannot update the index page.")
     except Exception as e:
@@ -125,9 +128,9 @@ def main_loop():
     try:
         logging.info("Ensuring core site files (CSS, disclosure) are uploaded...")
         with open('style.css', 'r', encoding='utf-8') as f:
-            deploy_to_ftp('style.css', f.read(), config.get('ftp'))
+            deploy_to_disk('style.css', f.read(), os.path.expanduser(web_app_path))
         with open('disclosure.html', 'r', encoding='utf-8') as f:
-            deploy_to_ftp('disclosure.html', f.read(), config.get('ftp'))
+            deploy_to_disk('disclosure.html', f.read(), os.path.expanduser(web_app_path))
     except FileNotFoundError as e:
         logging.warning(f"{e.filename} not found locally. Skipping its upload.")
     except Exception as e:

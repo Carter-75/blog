@@ -1,15 +1,15 @@
 {
-  "site_url": "http://ultimatenews.lovestoblog.com",
-  "ftp": {
-    "host": "ftpupload.net",
-    "user": "if0_39425938",
-    "pass": "LavaPhoenix7501"
-  },
+  "site_url": "http://CarterM75.pythonanywhere.com",
+  "web_app_path": "/home/CarterM75/blog/webapp/",
   "content_provider": {
-    "provider": "ollama",
+    "provider": "groq",
     "ollama_settings": {
-      "model": "llama3:8b",
-      "base_url": "http://localhost:11434/api/generate"
+      "base_url": "http://localhost:11434/api/generate",
+      "model": "llama3:8b"
+    },
+    "groq_settings": {
+      "api_key": "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",
+      "model": "llama3-8b-8192"
     }
   },
   "keyword_management": {
@@ -35,19 +35,19 @@
   },
   "product_portfolio": [
     {
+      "title": "ProDentim",
+      "description": "A unique blend of 3.5 billion probiotic strains and nutrients specially designed to repopulate your mouth with good bacteria.",
+      "link": "https://2227d8j5u5y8es3axfr42o8vfa.hop.clickbank.net"
+    },
+    {
       "title": "Mitolyn",
-      "description": "Unlock your metabolic power and burn more calories with Mitolyn, a proprietary blend of 6 exotic nutrients and plants designed to support healthy mitochondria levels for fat burning and energy.",
-      "link": "https://8ae0dajy67rn2u8jlm386e5mfd.hop.clickbank.net"
+      "description": "A proprietary blend of 6 exotic nutrients and plants designed to support healthy mitochondria levels for fat burning and energy.",
+      "link": "https://c991a2n8q-xcoq4fr9of8qcv96.hop.clickbank.net"
     },
     {
-      "title": "ProDentim",
-      "description": "A unique blend of 3.5 billion probiotic strains and nutrients specially designed for the health of your teeth and gums, helping to repopulate your mouth with good bacteria.",
-      "link": "https://cb0e9gw0cmxsck1d5lscuekb8f.hop.clickbank.net"
-    },
-    {
-      "title": "ProDentim",
-      "description": "A unique blend of 3.5 billion probiotic strains and nutrients specially designed to repopulate your mouth with good bacteria for the health of your teeth and gums.",
-      "link": "https://745bbej1g8yp6z9m3kg2rpu88j.hop.clickbank.net"
+      "title": "Puravive",
+      "description": "A natural supplement designed to support weight loss by boosting brown adipose tissue (BAT) levels.",
+      "link": "https://550e18oaq9vfoqfducs2xo2p6l.hop.clickbank.net"
     }
   ]
 } 

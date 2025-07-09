@@ -4,7 +4,7 @@ import json
 import os
 
 from utils import get_config, get_post_history, save_post_history
-from site_deployer import update_index_page, delete_from_ftp, list_html_files_on_ftp
+from site_deployer import update_index_page, delete_from_disk, list_html_files_on_disk
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -25,15 +25,16 @@ def list_posts(history_file):
     print("------------------------\n")
 
 def delete_post(filename_to_delete, config):
-    """Deletes a post from FTP and the local history, then rebuilds the index."""
+    """Deletes a post from disk and the local history, then rebuilds the index."""
     logging.info(f"Starting deletion process for '{filename_to_delete}'...")
     
+    web_app_path = config.get('web_app_path', '~/MoneyScript/webapp') # Example path
     history_file = config.get('throttling', {}).get('post_history_file', 'post_history.log')
     
-    # 1. Delete from FTP server
-    ftp_deleted = delete_from_ftp(filename_to_delete, config['ftp'])
-    if not ftp_deleted:
-        logging.error("Halting process because FTP deletion failed.")
+    # 1. Delete from disk
+    disk_deleted = delete_from_disk(filename_to_delete, os.path.expanduser(web_app_path))
+    if not disk_deleted:
+        logging.error("Halting process because disk deletion failed.")
         return
 
     # 2. Update local history file
@@ -60,9 +61,8 @@ def delete_post(filename_to_delete, config):
     try:
         with open('template.html', 'r', encoding='utf-8') as f:
             template_html = f.read()
-        # We need to get the history again, since we just overwrote it
         updated_history = get_post_history(history_file)
-        update_index_page(updated_history, config.get('ftp'), template_html)
+        update_index_page(updated_history, os.path.expanduser(web_app_path), template_html)
         logging.info("Index page has been successfully rebuilt.")
     except FileNotFoundError:
         logging.error("Could not find template.html. Cannot rebuild the index page.")
@@ -74,20 +74,20 @@ def delete_post(filename_to_delete, config):
 
 def delete_all_posts(config):
     """
-    Connects to the FTP server, finds all HTML files, and deletes them
-    after user confirmation. It then clears local history and rebuilds the index.
+    Finds all HTML files on disk and deletes them after user confirmation.
     """
+    web_app_path = config.get('web_app_path', '~/MoneyScript/webapp')
     history_file = config.get('throttling', {}).get('post_history_file', 'post_history.log')
 
-    # 1. Get the list of files directly from the FTP server
-    logging.info("Getting the list of published articles directly from the server...")
-    all_html_files = list_html_files_on_ftp(config['ftp'])
+    # 1. Get the list of files directly from the disk
+    logging.info("Getting the list of published articles directly from the web app directory...")
+    all_html_files = list_html_files_on_disk(os.path.expanduser(web_app_path))
 
     if all_html_files is None:
-        logging.error("Could not retrieve file list from FTP server. Aborting.")
+        logging.error("Could not retrieve file list from disk. Aborting.")
         return
 
-    # 2. Filter out essential files that should not be deleted
+    # 2. Filter out essential files
     files_to_delete = [
         f for f in all_html_files 
         if f not in ['index.html', 'disclosure.html']
@@ -112,10 +112,10 @@ def delete_all_posts(config):
 
     logging.info("User confirmed. Proceeding with deletion of all posts...")
     
-    # 4. Delete all the files from FTP
+    # 4. Delete all the files from disk
     all_deleted_successfully = True
     for filename in files_to_delete:
-        if not delete_from_ftp(filename, config['ftp']):
+        if not delete_from_disk(filename, os.path.expanduser(web_app_path)):
             all_deleted_successfully = False
             logging.error(f"Failed to delete {filename}. Stopping to prevent further issues.")
             break # Stop if any deletion fails
@@ -133,7 +133,7 @@ def delete_all_posts(config):
     try:
         with open('template.html', 'r', encoding='utf-8') as f:
             template_html = f.read()
-        update_index_page([], config.get('ftp'), template_html) # Pass an empty history
+        update_index_page([], os.path.expanduser(web_app_path), template_html)
         logging.info("Empty index page has been successfully deployed.")
     except FileNotFoundError:
         logging.error("Could not find template.html. Cannot rebuild the index page.")
