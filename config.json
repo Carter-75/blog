@@ -1,6 +1,6 @@
 {
   "site_url": "http://CarterM75.pythonanywhere.com",
-  "web_app_path": "/home/CarterM75/blog/webapp/",
+  "web_app_path": "/home/CarterM75/MoneyScript/webapp/",
   "content_provider": {
     "provider": "groq",
     "ollama_settings": {
