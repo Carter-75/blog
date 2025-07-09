@@ -136,3 +136,39 @@ def delete_from_ftp(filename, ftp_config):
     except Exception as e:
         logging.error(f"An unexpected error occurred during FTP deletion: {e}")
         return False 
+
+
+def list_html_files_on_ftp(ftp_config):
+    """
+    Connects to the FTP server and lists all .html files in the remote directory.
+
+    Args:
+        ftp_config (dict): A dictionary containing 'host', 'user', and 'pass'.
+
+    Returns:
+        list: A list of HTML filenames, or None if an error occurs.
+    """
+    try:
+        host = ftp_config['host']
+        user = ftp_config['user']
+        password = ftp_config['pass']
+        remote_dir = ftp_config.get('remote_dir', '/htdocs/')
+
+        logging.info(f"Connecting to FTP host to list files...")
+        with ftplib.FTP(host, user, password, timeout=30) as ftp:
+            ftp.cwd(remote_dir)
+            files = ftp.nlst()
+            # Filter for .html files only
+            html_files = [f for f in files if f.endswith('.html')]
+            logging.info(f"Found {len(html_files)} HTML files on the server.")
+            return html_files
+
+    except ftplib.all_errors as e:
+        logging.error(f"An FTP error occurred while trying to list files: {e}")
+        return None
+    except KeyError as e:
+        logging.error(f"Missing FTP configuration key for listing files: {e}")
+        return None
+    except Exception as e:
+        logging.error(f"An unexpected error occurred during FTP file listing: {e}")
+        return None 

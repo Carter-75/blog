@@ -1,15 +1,1 @@
-# Python
-__pycache__/
-venv/
-*.pyc
-
-# Output files
-logs/
-output/
-post_history.log
-*.log
-
-# Editor/OS specific
-.vscode/
-.idea/
-.DS_Store
+ 

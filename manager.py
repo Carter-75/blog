@@ -3,8 +3,8 @@ import logging
 import json
 import os
 
-from utils import get_config, get_post_history
-from site_deployer import update_index_page, delete_from_ftp
+from utils import get_config, get_post_history, save_post_history
+from site_deployer import update_index_page, delete_from_ftp, list_html_files_on_ftp
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -73,16 +73,38 @@ def delete_post(filename_to_delete, config):
 
 
 def delete_all_posts(config):
-    """Deletes ALL posts from FTP and local history after user confirmation."""
+    """
+    Connects to the FTP server, finds all HTML files, and deletes them
+    after user confirmation. It then clears local history and rebuilds the index.
+    """
     history_file = config.get('throttling', {}).get('post_history_file', 'post_history.log')
-    history = get_post_history(history_file)
 
-    if not history:
-        logging.info("No posts found in history. Nothing to delete.")
+    # 1. Get the list of files directly from the FTP server
+    logging.info("Getting the list of published articles directly from the server...")
+    all_html_files = list_html_files_on_ftp(config['ftp'])
+
+    if all_html_files is None:
+        logging.error("Could not retrieve file list from FTP server. Aborting.")
         return
 
-    logging.warning(f"You are about to delete all {len(history)} posts from your server and local history.")
-    confirm = input("This action CANNOT be undone. Are you sure you want to continue? (type 'yes' to confirm): ")
+    # 2. Filter out essential files that should not be deleted
+    files_to_delete = [
+        f for f in all_html_files 
+        if f not in ['index.html', 'disclosure.html']
+    ]
+
+    if not files_to_delete:
+        logging.info("No articles found on the server to delete.")
+        return
+
+    # 3. Ask for user confirmation
+    print("\n--- Articles Found on Server ---")
+    for filename in files_to_delete:
+        print(f"- {filename}")
+    print("--------------------------------")
+    
+    logging.warning(f"You are about to delete all {len(files_to_delete)} articles from your server.")
+    confirm = input("This action CANNOT be undone. Are you sure? (type 'yes' to confirm): ")
 
     if confirm.lower() != 'yes':
         logging.info("Deletion cancelled by user.")
@@ -90,33 +112,33 @@ def delete_all_posts(config):
 
     logging.info("User confirmed. Proceeding with deletion of all posts...")
     
-    # 1. Delete all files from FTP
-    for post in history:
-        filename = post.get('filename')
-        if filename:
-            delete_from_ftp(filename, config['ftp'])
+    # 4. Delete all the files from FTP
+    all_deleted_successfully = True
+    for filename in files_to_delete:
+        if not delete_from_ftp(filename, config['ftp']):
+            all_deleted_successfully = False
+            logging.error(f"Failed to delete {filename}. Stopping to prevent further issues.")
+            break # Stop if any deletion fails
     
-    # 2. Clear the local history file
-    try:
-        with open(history_file, 'w') as f:
-            f.write('')
-        logging.info("Successfully cleared local post history.")
-    except IOError as e:
-        logging.error(f"Failed to clear history file: {e}")
+    if not all_deleted_successfully:
+        logging.error("Some files could not be deleted. The local history will not be cleared. Please check the server manually.")
         return
+
+    # 5. Clear the local history file
+    logging.info("Clearing local post history...")
+    save_post_history(history_file, []) # Save an empty list
         
-    # 3. Rebuild and deploy a now-empty index.html
+    # 6. Rebuild and deploy a now-empty index.html
     logging.info("Rebuilding and deploying empty index page...")
     try:
         with open('template.html', 'r', encoding='utf-8') as f:
             template_html = f.read()
-        # Pass an empty history to build an empty index
-        update_index_page([], config.get('ftp'), template_html)
+        update_index_page([], config.get('ftp'), template_html) # Pass an empty history
         logging.info("Empty index page has been successfully deployed.")
     except FileNotFoundError:
         logging.error("Could not find template.html. Cannot rebuild the index page.")
     
-    logging.info("All posts have been successfully deleted.")
+    logging.info("All posts have been successfully deleted from the server.")
 
 
 if __name__ == "__main__":

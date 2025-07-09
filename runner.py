@@ -37,128 +37,101 @@ def main_loop():
     article_html = generate_content(product_info, config.get('content_provider'))
     if not article_html:
         logging.error("Failed to generate content. Skipping this cycle.")
-        return
+        # We still run the cleanup logic even on failure
+    else:
+        # --- Step 3: Insert the Affiliate Link ---
+        final_html = insert_affiliate_links(article_html, product_info)
+        
+        # Extract a clean title for the filename and social post
+        article_title = extract_title_from_html(final_html)
+        if not article_title:
+            logging.warning("Could not extract title from generated HTML. Using a generic title.")
+            article_title = product_info['title'] # Fallback to product title
 
-    # The affiliate link is now dynamic from the product finder
-    dynamic_affiliate_link = product_info['link']
+        # ---=== Cache-Busting ===---
+        cache_buster = str(int(time.time()))
+        final_html = final_html.replace('{{CACHE_BUSTER}}', cache_buster)
+        
+        # --- Step 4: Deploy the New Post to the Website ---
+        filename = f"{sanitize_filename(article_title)}.html"
+        
+        success = deploy_to_ftp(filename, final_html, config.get('ftp'))
+        if success:
+            # Add to history ONLY on successful deployment
+            history_file = config.get('throttling', {}).get('post_history_file', 'post_history.log')
+            post_history = get_post_history(history_file)
+            new_record = {
+                'timestamp': datetime.now(),
+                'filename': filename,
+                'title': article_title,
+                'product_link': product_info['link']
+            }
+            post_history.append(new_record)
+            save_post_history(history_file, post_history)
+            logging.info(f"Successfully posted '{filename}' and updated history.")
 
-    # --- Step 3: Insert the Affiliate Link ---
-    # Pass the entire product_info object to the new inserter function
-    final_html = insert_affiliate_links(article_html, product_info)
+            # --- Step 5: Promote on Social Media (only on success) ---
+            reddit_config = config.get('social_posting', {}).get('reddit', {})
+            if reddit_config.get('enabled'):
+                site_url = config.get('site_url')
+                if not site_url or 'YOUR_SITE_URL' in site_url:
+                    logging.warning("Site URL is not configured. Cannot post to social media.")
+                else:
+                    reddit_config['site_url'] = site_url
+                    post_url = f"{site_url.rstrip('/')}/{filename}"
+                    post_to_reddit(reddit_config, article_title, post_url, final_html)
     
-    # Extract a clean title for the filename and social post
-    article_title = extract_title_from_html(final_html)
-    if not article_title:
-        logging.warning("Could not extract title from generated HTML. Using a generic title.")
-        article_title = product_info['title'] # Fallback to product title
-
-    # ---=== Cache-Busting ===---
-    # Replace the placeholder with the current timestamp to invalidate browser cache
-    cache_buster = str(int(time.time()))
-    final_html = final_html.replace('{{CACHE_BUSTER}}', cache_buster)
-    
-    # --- Step 4: Deploy the New Post to the Website ---
-    # Create a clean, web-safe filename from the article title
-    filename = f"{sanitize_filename(article_title)}.html"
-    
-    success = deploy_to_ftp(filename, final_html, config.get('ftp'))
-    if not success:
-        logging.error("Failed to deploy the new post via FTP. Skipping this cycle.")
-        return
-
-    # Add post to history before any other actions that rely on the full history
+    # --- Step 6: Site-wide Cleanup and Index Rebuild ---
+    # This runs every cycle, regardless of whether a post succeeded or failed.
+    logging.info("Starting site-wide cleanup and index rebuild...")
     history_file = config.get('throttling', {}).get('post_history_file', 'post_history.log')
     post_history = get_post_history(history_file)
     
-    new_record = {
-        'timestamp': datetime.now(),
-        'filename': filename,
-        'title': article_title,
-        'product_link': product_info['link'] # Store the product link for rotation logic
-    }
-    post_history.append(new_record)
-    logging.info(f"Successfully posted '{filename}' and added to history session.")
-
-    # --- Step 5: Post Rotation Logic ---
-    # This logic now runs for ALL products on every cycle to enforce the site-wide limit.
+    # Post-rotation logic for ALL products
     MAX_POSTS_PER_PRODUCT = 2
     all_products_in_portfolio = config.get('product_portfolio', [])
 
-    if not all_products_in_portfolio:
-        logging.warning("No product portfolio found in config. Cannot run rotation logic.")
-    else:
+    if all_products_in_portfolio:
         for product_in_portfolio in all_products_in_portfolio:
             product_link = product_in_portfolio['link']
-            
-            # Get all posts for the current product from the history
             product_posts = [p for p in post_history if p.get('product_link') == product_link]
             
             if len(product_posts) > MAX_POSTS_PER_PRODUCT:
-                # Sort by timestamp to find the oldest ones
                 product_posts.sort(key=lambda x: x['timestamp'])
-                
-                # Calculate how many posts to delete
                 num_to_delete = len(product_posts) - MAX_POSTS_PER_PRODUCT
                 posts_to_delete = product_posts[:num_to_delete]
                 
-                logging.info(f"Rotation triggered for product link '{product_link}'. Found {len(product_posts)} posts, max is {MAX_POSTS_PER_PRODUCT}. Deleting {num_to_delete} oldest post(s).")
-
+                logging.info(f"Cleanup triggered for product link '{product_link}'. Found {len(product_posts)} posts, max is {MAX_POSTS_PER_PRODUCT}. Deleting {num_to_delete} oldest post(s).")
                 for post in posts_to_delete:
-                    logging.info(f"Deleting post: {post['filename']}")
-                    delete_success = delete_from_ftp(post['filename'], config.get('ftp'))
-                    
-                    if delete_success:
-                        # IMPORTANT: Remove from the main history list that persists across the loops
+                    if delete_from_ftp(post['filename'], config.get('ftp')):
                         post_history = [p for p in post_history if p.get('filename') != post.get('filename')]
-                        logging.info(f"Successfully removed '{post['filename']}' from history.")
                     else:
                         logging.error(f"Failed to delete '{post['filename']}' from FTP. It will remain in history. Aborting rotation for this product.")
-                        break # Stop trying to delete for this product if one fails
-            
-    # Save the updated history (with new post and any deletions)
-    save_post_history(history_file, post_history)
-
-    # --- Step 6: Update the main index.html page ---
+                        break
+        
+        save_post_history(history_file, post_history)
+    
+    # Update the main index page based on the final, cleaned history
     try:
         with open('template.html', 'r', encoding='utf-8') as f:
             template_html = f.read()
-        
-        # We use the now-updated post_history to build the index page
         update_index_page(post_history, config.get('ftp'), template_html)
-
     except FileNotFoundError:
         logging.error("Could not find template.html. Cannot update the index page.")
     except Exception as e:
         logging.error(f"An error occurred while updating the index page: {e}")
 
-    # Also ensure the css and disclosure pages are always present on the server
+    # Also ensure core files are present
     try:
         logging.info("Ensuring core site files (CSS, disclosure) are uploaded...")
-        # Upload stylesheet
         with open('style.css', 'r', encoding='utf-8') as f:
-            style_content = f.read()
-        deploy_to_ftp('style.css', style_content, config.get('ftp'))
-        
-        # Upload disclosure page
+            deploy_to_ftp('style.css', f.read(), config.get('ftp'))
         with open('disclosure.html', 'r', encoding='utf-8') as f:
-            disclosure_content = f.read()
-        deploy_to_ftp('disclosure.html', disclosure_content, config.get('ftp'))
+            deploy_to_ftp('disclosure.html', f.read(), config.get('ftp'))
     except FileNotFoundError as e:
         logging.warning(f"{e.filename} not found locally. Skipping its upload.")
     except Exception as e:
         logging.error(f"An error occurred while uploading core files: {e}")
-
-    # --- Step 7: Promote on Social Media ---
-    reddit_config = config.get('social_posting', {}).get('reddit', {})
-    if reddit_config.get('enabled'):
-        site_url = config.get('site_url')
-        if not site_url or 'YOUR_SITE_URL' in site_url:
-            logging.warning("Site URL is not configured. Cannot post to social media.")
-        else:
-            # Add site_url to the config dict passed to the function
-            reddit_config['site_url'] = site_url
-            post_url = f"{site_url.rstrip('/')}/{filename}" # This is still useful for other potential platforms
-            post_to_reddit(reddit_config, article_title, post_url, final_html)
 
     logging.info("Cycle complete. Waiting for next opportunity.")
 
